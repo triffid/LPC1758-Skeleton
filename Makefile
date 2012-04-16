@@ -8,13 +8,16 @@ CSRC     = $(wildcard *.c)
 CXXSRC   = $(wildcard *.cpp)
 ASRC     = $(wildcard *.S)
 
-OSRC     = lpc17xx_clkpwr.o lpc17xx_pinsel.o
-
 INC      = inc
 
 LIBRARIES = 
 
 OUTDIR   = build
+
+OSRC     = 
+
+NXPSRC   = $(wildcard drivers/Drivers/source/lpc17xx_*.c)
+NXPO     = $(patsubst drivers/Drivers/source/%.c,$(OUTDIR)/%.o,$(NXPSRC)) $(OUTDIR)/system_LPC17xx.o
 
 #DEPDIR   = .deps
 #df       = $(DEPDIR)/$(*F)
@@ -28,12 +31,15 @@ PREFIX   = $(ARCH)-
 CC       = $(PREFIX)gcc
 CXX      = $(PREFIX)g++
 OBJCOPY  = $(PREFIX)objcopy
+AR       = $(PREFIX)ar
 
 MKDIR    = mkdir
+RMDIR    = rmdir
+RM       = rm -f
 
 OPTIMIZE = s
 
-CDEFS    = __BUILD_WITH_EXAMPLE__
+CDEFS    =
 
 FLAGS    = -O$(OPTIMIZE) -mcpu=$(MCU) -mthumb -mthumb-interwork -mlong-calls -ffunction-sections -fdata-sections -Wall
 FLAGS   += $(patsubst %,-I%,$(INC))
@@ -45,9 +51,9 @@ CXXFLAGS = $(FLAGS) -fno-rtti -fno-exceptions
 LDFLAGS  = $(CXXFLAGS) -Wl,--gc-sections -Wl,-e,__cs3_reset_cortex_m -Wl,-T,lpc1758.ld
 LDFLAGS += $(patsubst %,-L%,$(LIBRARIES)) -lc -lstdc++
 
-OBJ      = $(patsubst %,$(OUTDIR)/%,$(CSRC:.c=.o) $(CXXSRC:.cpp=.o) $(ASRC:.S=.o)) $(OSRC)
+OBJ      = $(patsubst %,$(OUTDIR)/%,$(CSRC:.c=.o) $(CXXSRC:.cpp=.o) $(ASRC:.S=.o))
 
-VPATH    = . $(INC) drivers/Drivers/source
+VPATH    = . $(INC) drivers/Drivers/source drivers/Core/CM3/DeviceSupport/NXP/LPC17xx
 
 .PHONY: all clean program
 
@@ -56,7 +62,8 @@ VPATH    = . $(INC) drivers/Drivers/source
 all: $(OUTDIR)/$(PROJECT).elf $(OUTDIR)/$(PROJECT).bin $(OUTDIR)/$(PROJECT).hex
 
 clean:
-	$(RM) -f $(OBJ) $(OUTDIR)/$(PROJECT).bin $(OUTDIR)/$(PROJECT).hex $(OUTDIR)/$(PROJECT).elf
+	$(RM) $(OBJ) $(OUTDIR)/$(PROJECT).bin $(OUTDIR)/$(PROJECT).hex $(OUTDIR)/$(PROJECT).elf $(NXPO)
+	$(RMDIR) $(OUTDIR)
 
 program: $(OUTDIR)/$(PROJECT).bin
 	mount /mnt/r2c2
@@ -74,9 +81,9 @@ $(OUTDIR)/%.hex: $(OUTDIR)/%.elf
 	@echo "  COPY  " $@
 	@$(OBJCOPY) -O ihex $< $@
 
-$(OUTDIR)/%.elf: $(OBJ)
+$(OUTDIR)/%.elf: $(OBJ) $(OUTDIR)/nxp.ar
 	@echo "  LINK  " $@
-	@$(CXX) $^ -o $@ $(LDFLAGS)
+	@$(CXX) $^ $(OSRC) -o $@ $(LDFLAGS)
 
 $(OUTDIR)/%.o: %.c $(OUTDIR)
 	@echo "  CC    " $@
@@ -92,5 +99,10 @@ $(OUTDIR)/%.o: %.S $(OUTDIR)
 	@echo "  AS    " $@
 	@#$(CC) $(CFLAGS) -MM -MF $(df).d $<
 	@$(CC) $(ASFLAGS) -c -o $@ $<
+
+$(OUTDIR)/nxp.ar: $(NXPO)
+	@echo "  AR    " $@
+	@$(AR) ru $@ $^
+	
 
 #-include $(SRCS:%.c=$(DEPDIR)/%.P)
