@@ -1,1 +1,1 @@
-../../CMSISv2p00_LPC17xx/inc/LPC17xx.h
+../drivers/Core/CM3/DeviceSupport/NXP/LPC17xx/LPC17xx.h
