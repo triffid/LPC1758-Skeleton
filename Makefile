@@ -8,13 +8,16 @@ CSRC     = $(wildcard *.c)
 CXXSRC   = $(wildcard *.cpp)
 ASRC     = $(wildcard *.S)
 
-OSRC     = 
+OSRC     = lpc17xx_clkpwr.o lpc17xx_pinsel.o
 
 INC      = inc
 
 LIBRARIES = 
 
 OUTDIR   = build
+
+#DEPDIR   = .deps
+#df       = $(DEPDIR)/$(*F)
 
 CHIP     = lpc1758
 MCU      = cortex-m3
@@ -42,22 +45,18 @@ CXXFLAGS = $(FLAGS) -fno-rtti -fno-exceptions
 LDFLAGS  = $(CXXFLAGS) -Wl,--gc-sections -Wl,-e,__cs3_reset_cortex_m -Wl,-T,lpc1758.ld
 LDFLAGS += $(patsubst %,-L%,$(LIBRARIES)) -lc -lstdc++
 
-OBJ      = $(patsubst %,$(OUTDIR)/%,$(CSRC:.c=.o) $(CXXSRC:.cpp=.o) $(ASRC:.S=.o))
+OBJ      = $(patsubst %,$(OUTDIR)/%,$(CSRC:.c=.o) $(CXXSRC:.cpp=.o) $(ASRC:.S=.o)) $(OSRC)
 
-VPATH    = . $(INC)
+VPATH    = . $(INC) drivers/Drivers/source
 
-.PHONY: all bin hex clean program
+.PHONY: all clean program
 
 .PRECIOUS: $(OBJ)
 
-all: $(OUTDIR)/$(PROJECT).elf bin hex
+all: $(OUTDIR)/$(PROJECT).elf $(OUTDIR)/$(PROJECT).bin $(OUTDIR)/$(PROJECT).hex
 
 clean:
 	$(RM) -f $(OBJ) $(OUTDIR)/$(PROJECT).bin $(OUTDIR)/$(PROJECT).hex $(OUTDIR)/$(PROJECT).elf
-
-bin: $(OUTDIR)/$(PROJECT).bin
-
-hex: $(OUTDIR)/$(PROJECT).hex
 
 program: $(OUTDIR)/$(PROJECT).bin
 	mount /mnt/r2c2
@@ -75,18 +74,23 @@ $(OUTDIR)/%.hex: $(OUTDIR)/%.elf
 	@echo "  COPY  " $@
 	@$(OBJCOPY) -O ihex $< $@
 
-$(OUTDIR)/%.elf: $(OBJ) $(OSRC)
+$(OUTDIR)/%.elf: $(OBJ)
 	@echo "  LINK  " $@
-	@$(CXX) $^ $(OSRC) -o $@ $(LDFLAGS)
+	@$(CXX) $^ -o $@ $(LDFLAGS)
 
 $(OUTDIR)/%.o: %.c $(OUTDIR)
 	@echo "  CC    " $@
+	@#$(CC) $(CFLAGS) -MM -MF $(df).d $<
 	@$(CC) $(CFLAGS) -c -o $@ $<
 
 $(OUTDIR)/%.o: %.cpp $(OUTDIR)
 	@echo "  CXX   " $@
+	@#$(CXX) $(CFLAGS) -MM -MF $(df).d $<
 	@$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 $(OUTDIR)/%.o: %.S $(OUTDIR)
 	@echo "  AS    " $@
+	@#$(CC) $(CFLAGS) -MM -MF $(df).d $<
 	@$(CC) $(ASFLAGS) -c -o $@ $<
+
+#-include $(SRCS:%.c=$(DEPDIR)/%.P)
