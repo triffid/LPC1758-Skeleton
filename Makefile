@@ -59,7 +59,7 @@ VPATH    = . $(INC) drivers/Drivers/source drivers/Core/CM3/DeviceSupport/NXP/LP
 
 .PRECIOUS: $(OBJ)
 
-all: $(OUTDIR)/$(PROJECT).elf $(OUTDIR)/$(PROJECT).bin $(OUTDIR)/$(PROJECT).hex
+all: $(OUTDIR) $(OUTDIR)/$(PROJECT).elf $(OUTDIR)/$(PROJECT).bin $(OUTDIR)/$(PROJECT).hex
 
 clean:
 	$(RM) $(OBJ) $(OUTDIR)/$(PROJECT).bin $(OUTDIR)/$(PROJECT).hex $(OUTDIR)/$(PROJECT).elf $(NXPO)
@@ -85,17 +85,17 @@ $(OUTDIR)/%.elf: $(OBJ) $(OUTDIR)/nxp.ar
 	@echo "  LINK  " $@
 	@$(CXX) $^ $(OSRC) -o $@ $(LDFLAGS)
 
-$(OUTDIR)/%.o: %.c $(OUTDIR)
+$(OUTDIR)/%.o: %.c
 	@echo "  CC    " $@
 	@#$(CC) $(CFLAGS) -MM -MF $(df).d $<
 	@$(CC) $(CFLAGS) -c -o $@ $<
 
-$(OUTDIR)/%.o: %.cpp $(OUTDIR)
+$(OUTDIR)/%.o: %.cpp
 	@echo "  CXX   " $@
 	@#$(CXX) $(CFLAGS) -MM -MF $(df).d $<
 	@$(CXX) $(CXXFLAGS) -c -o $@ $<
 
-$(OUTDIR)/%.o: %.S $(OUTDIR)
+$(OUTDIR)/%.o: %.S
 	@echo "  AS    " $@
 	@#$(CC) $(CFLAGS) -MM -MF $(df).d $<
 	@$(CC) $(ASFLAGS) -c -o $@ $<
