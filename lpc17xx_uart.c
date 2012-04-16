@@ -95,7 +95,7 @@ static Status uart_set_divisors(LPC_UART_TypeDef *UARTx, uint32_t baudrate)
 	}
 
 
-	uClk = uClk >> 4; /* div by 16 */
+	//uClk = uClk >> 4; /* div by 16 */
 	/* In the Uart IP block, baud rate is calculated using FDR and DLL-DLM registers
 	* The formula is :
 	* BaudRate= uClk * (mulFracDiv/(mulFracDiv+dividerAddFracDiv) / (16 * (DLL)
