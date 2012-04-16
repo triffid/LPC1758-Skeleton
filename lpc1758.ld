@@ -177,6 +177,8 @@ SECTIONS
   .ahb_bank0(NOLOAD) :
   {
     *(.ahb_sram_bank0 .ahb_sram_bank0.*)
+    *(.USB_RAM .USB_RAM.*)
+    *(USB_RAM USB_RAM.*)
   } > ahbb0
   
   
