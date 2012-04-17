@@ -235,14 +235,9 @@ static const struct {
 	usbdesc_device				device;
 	usbdesc_configuration	config0;
 	usbdesc_interface			if0;
-	//U8										fd_header[5];
 	usbcdc_header					fd_header;
-	//U8										fd_callmgmt[5];
-	usbcdc_callmgmt				fd_callmgmt;
-	//U8										fd_acm[4];
-	usbcdc_acm						fd_acm;
-	//U8										fd_union[5];
 	usbcdc_union					fd_union;
+	usbcdc_ether					fd_ether;
 	usbdesc_endpoint			ep_notify;
 	usbdesc_interface			if_data;
 	usbdesc_endpoint			ep_bulkout;
@@ -251,6 +246,7 @@ static const struct {
 	usbdesc_string_l(6)		st_Manufacturer;
 	usbdesc_string_l(9)		st_Product;
 	usbdesc_string_l(8)		st_Serial;
+	usbdesc_string_l(12)	st_MAC;
 	U8										end;
 
 } abDescriptors = {
@@ -275,10 +271,9 @@ static const struct {
 		DT_CONFIGURATION,
 		.wTotalLength				= sizeof(usbdesc_configuration)
 												+ sizeof(usbdesc_interface)
-												+ 5
-												+ 5
-												+ 4
-												+ 5
+												+ sizeof(usbcdc_header)
+												+ sizeof(usbcdc_union)
+												+ sizeof(usbcdc_ether)
 												+ sizeof(usbdesc_endpoint)
 												+ sizeof(usbdesc_interface)
 												+ sizeof(usbdesc_endpoint)
@@ -297,8 +292,8 @@ static const struct {
 		.bAlternateSetting	= 0,
 		.bNumEndPoints			= 1,
 		.bInterfaceClass		= UC_COMM,
-		.bInterfaceSubClass	= USB_CDC_SUBCLASS_ACM,
-		.bInterfaceProtocol	= 1, // linux requires value of 1 for the cdc_acm module
+		.bInterfaceSubClass	= USB_CDC_SUBCLASS_ETHERNET,
+		.bInterfaceProtocol	= 0, // linux requires value of 1 for the cdc_acm module
 		.iInterface					= 0,
 	},
 	.fd_header = {
@@ -307,25 +302,22 @@ static const struct {
 		USB_CDC_SUBTYPE_HEADER,
 		.bcdCDC = 0x0110,
 	},
-	.fd_callmgmt = {
-		USB_CDC_LENGTH_CALLMGMT,
-		DT_CDC_DESCRIPTOR,
-		USB_CDC_SUBTYPE_CALL_MANAGEMENT,
-		.bmCapabilities = USB_CDC_CALLMGMT_CAP_CALLMGMT,
-		.bDataInterface = 1,
-	},
-	.fd_acm = {
-		USB_CDC_LENGTH_ACM,
-		DT_CDC_DESCRIPTOR,
-		USB_CDC_SUBTYPE_ACM,
-		.bmCapabilities = USB_CDC_ACM_CAP_LINE,
-	},
 	.fd_union = {
 		USB_CDC_LENGTH_UNION,
 		DT_CDC_DESCRIPTOR,
 		USB_CDC_SUBTYPE_UNION,
 		.bMasterInterface = 0,
 		.bSlaveInterface0 = 1,
+	},
+	.fd_ether = {
+		USB_CDC_LENGTH_ETHER,
+		DT_CDC_DESCRIPTOR,
+		USB_CDC_SUBTYPE_ETHERNET,
+		.iMacAddress = 4,
+		.bmEthernetStatistics = 0,
+		.wMaxSegmentSize = 1514,
+		.wNumberMCFilters = 0,
+		.bNumberPowerFilters = 0,
 	},
 	.ep_notify = {
 		DL_ENDPOINT,
@@ -381,6 +373,11 @@ static const struct {
 		18,
 		DT_STRING,
 		{ 'D','E','A','D','B','E','E','F', },
+	},
+	.st_MAC = {
+		26,
+		DT_STRING,
+		{ '0','6','2','D','2','8','3','A','9','D','3','B', },
 	},
 	0,
 };
