@@ -4,7 +4,7 @@
 #include "uart.hpp"
 #include "gpio.hpp"
 
-#include "lpc17xx.h"
+#include "LPC17xx.h"
 #include "lpc17xx_nvic.h"
 
 void *operator new(size_t size) throw() { return malloc(size); }
