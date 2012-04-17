@@ -4,6 +4,9 @@
 #include "uart.hpp"
 #include "gpio.hpp"
 
+#include "lpc17xx.h"
+#include "lpc17xx_nvic.h"
+
 void *operator new(size_t size) throw() { return malloc(size); }
 
 void operator delete(void *p) throw() { free(p); }
@@ -33,6 +36,12 @@ void _dbgled_init() {
 }
 
 extern "C" {
+	void init_nvic() {
+		NVIC_DeInit();
+		NVIC_SCBDeInit();
+		extern void* __cs3_interrupt_vector_cortex_m;
+		NVIC_SetVTOR((uint32_t) &__cs3_interrupt_vector_cortex_m);
+	}
 
 	void dbgled(int l) {
 		_dbgled_init();

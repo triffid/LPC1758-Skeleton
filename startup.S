@@ -168,6 +168,10 @@ __cs3_reset_cortex_m:
     LDR     R0, =SystemInit
     BLX     R0
 
+/* initialise NVIC */
+    LDR     R0, =init_nvic
+    BLX     R0
+
 /* call main() */
     LDR     R0,=main
     BX      R0
