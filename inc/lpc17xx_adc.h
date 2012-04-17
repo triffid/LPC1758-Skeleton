@@ -1,1 +1,0 @@
-../drivers/Drivers/include/lpc17xx_adc.h

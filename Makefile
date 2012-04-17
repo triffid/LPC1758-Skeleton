@@ -8,16 +8,24 @@ CSRC     = $(wildcard *.c)
 CXXSRC   = $(wildcard *.cpp)
 ASRC     = $(wildcard *.S)
 
-INC      = inc
+SUBDIRS  = Drivers Core USB uip
 
-LIBRARIES = 
+INC      = inc $(patsubst %,%/inc, $(SUBDIRS)) $(dir $(shell find uip/ -name '*.h'))
+
+LIBRARIES =
 
 OUTDIR   = build
 
-OSRC     = 
+OSRC     =
 
-NXPSRC   = $(wildcard drivers/Drivers/source/lpc17xx_*.c)
-NXPO     = $(patsubst drivers/Drivers/source/%.c,$(OUTDIR)/%.o,$(NXPSRC)) $(OUTDIR)/system_LPC17xx.o
+NXPSRC   = $(shell find Drivers/ -name '*.c') $(shell find Core/ -name '*.c')
+NXPO     = $(patsubst %.c,$(OUTDIR)/%.o,$(notdir $(NXPSRC))) $(OUTDIR)/system_LPC17xx.o
+
+USBSRC   = $(shell find USB/ -name '*.c')
+USBO     = $(patsubst %.c,$(OUTDIR)/%.o,$(notdir $(USBSRC)))
+
+UIPSRC   = $(shell find uip/ -name '*.c')
+UIPO     = $(patsubst %.c,$(OUTDIR)/%.o,$(notdir $(UIPSRC)))
 
 #DEPDIR   = .deps
 #df       = $(DEPDIR)/$(*F)
@@ -39,7 +47,7 @@ RM       = rm -f
 
 OPTIMIZE = s
 
-CDEFS    =
+CDEFS    = MAX_URI_LENGTH=512 __LPC17XX__ DEBUG_MESSAGES
 
 FLAGS    = -O$(OPTIMIZE) -mcpu=$(MCU) -mthumb -mthumb-interwork -mlong-calls -ffunction-sections -fdata-sections -Wall
 FLAGS   += $(patsubst %,-I%,$(INC))
@@ -53,7 +61,7 @@ LDFLAGS += $(patsubst %,-L%,$(LIBRARIES)) -lc -lstdc++
 
 OBJ      = $(patsubst %,$(OUTDIR)/%,$(CSRC:.c=.o) $(CXXSRC:.cpp=.o) $(ASRC:.S=.o))
 
-VPATH    = . $(INC) drivers/Drivers/source drivers/Core/CM3/DeviceSupport/NXP/LPC17xx
+VPATH    = . $(patsubst %/inc,%/src,$(INC)) $(dir $(NXPSRC)) $(dir $(USBSRC)) $(dir $(UIPSRC))
 
 .PHONY: all clean program
 
@@ -90,7 +98,7 @@ $(OUTDIR)/%.o: %.c
 	@#$(CC) $(CFLAGS) -MM -MF $(df).d $<
 	@$(CC) $(CFLAGS) -c -o $@ $<
 
-$(OUTDIR)/%.o: drivers/Drivers/source/%.c
+$(OUTDIR)/%.o: %.c
 	@echo "  CC    " $@
 	@#$(CC) $(CFLAGS) -MM -MF $(df).d $<
 	@$(CC) $(CFLAGS) -c -o $@ $<
@@ -108,6 +116,13 @@ $(OUTDIR)/%.o: %.S
 $(OUTDIR)/nxp.ar: $(NXPO)
 	@echo "  AR    " $@
 	@$(AR) ru $@ $^
-	
+
+$(OUTDIR)/usb.ar: $(USBO)
+	@echo "  AR    " $@
+	@$(AR) ru $@ $^
+
+$(OUTDIR)/uip.ar: $(UIPO)
+	@echo "  AR    " $@
+	@$(AR) ru $@ $^
 
 #-include $(SRCS:%.c=$(DEPDIR)/%.P)
