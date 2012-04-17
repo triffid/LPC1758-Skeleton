@@ -87,7 +87,7 @@ void dbgled(int l);
 #define BULK_OUT_EP              0x05
 #define BULK_IN_EP               0x82
 
-#define MAX_PACKET_SIZE          512
+#define MAX_PACKET_SIZE          64
 
 #define LE_WORD(x)               ((x)&0xFF),((x)>>8)
 
