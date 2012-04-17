@@ -2,7 +2,7 @@
 
 
 /*
-	LPCUSB, an USB device driver for LPC microcontrollers	
+	LPCUSB, an USB device driver for LPC microcontrollers
 	Copyright (C) 2006 Bertrik Sikken (bertrik@sikken.nl)
 
 	Redistribution and use in source and binary forms, with or without
@@ -19,7 +19,7 @@
 	THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
 	IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
 	OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-	IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, 
+	IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
 	INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
 	NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
 	DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
@@ -70,9 +70,11 @@
 
 #include "serial_fifo.h"
 
+#include "descriptor.h"
+
 void dbgled(int l);
 
-// CodeRed 
+// CodeRed
 // Control how the character received by the board is echoed back to the host
 // Set to 1 to increment character ('a' echoed as 'b'), else set to 0
 #define INCREMENT_ECHO_BY 1
@@ -118,122 +120,274 @@ static fifo_t rxfifo;
 // forward declaration of interrupt handler
 void USBIntHandler(void);
 
-static const U8 abDescriptors[] = {
+// static const U8 abDescriptors_s[] = {
+// // device descriptor
+// 	0x12,
+// 	DESC_DEVICE,
+// 	LE_WORD(0x0101),			// bcdUSB
+// 	0x02,						// bDeviceClass
+// 	0x00,						// bDeviceSubClass
+// 	0x00,						// bDeviceProtocol
+// 	MAX_PACKET_SIZE0,			// bMaxPacketSize
+// 	LE_WORD(0xFFFF),			// idVendor
+// 	LE_WORD(0x0005),			// idProduct
+// 	LE_WORD(0x0100),			// bcdDevice
+// 	0x01,						// iManufacturer
+// 	0x02,						// iProduct
+// 	0x03,						// iSerialNumber
+// 	0x01,						// bNumConfigurations
+//
+// // configuration descriptor
+// 	0x09,
+// 	DESC_CONFIGURATION,
+// 	LE_WORD(67),				// wTotalLength
+// 	0x02,						// bNumInterfaces
+// 	0x01,						// bConfigurationValue
+// 	0x00,						// iConfiguration
+// 	0xC0,						// bmAttributes
+// 	0x32,						// bMaxPower
+// // control class interface
+// 	0x09,
+// 	DESC_INTERFACE,
+// 	0x00,						// bInterfaceNumber
+// 	0x00,						// bAlternateSetting
+// 	0x01,						// bNumEndPoints
+// 	0x02,						// bInterfaceClass
+// 	0x02,						// bInterfaceSubClass
+// 	0x01,						// bInterfaceProtocol, linux requires value of 1 for the cdc_acm module
+// 	0x00,						// iInterface
+// // header functional descriptor
+// 	0x05,
+// 	CS_INTERFACE,
+// 	0x00,
+// 	LE_WORD(0x0110),
+// // call management functional descriptor
+// 	0x05,
+// 	CS_INTERFACE,
+// 	0x01,
+// 	0x01,						// bmCapabilities = device handles call management
+// 	0x01,						// bDataInterface
+// // ACM functional descriptor
+// 	0x04,
+// 	CS_INTERFACE,
+// 	0x02,
+// 	0x02,						// bmCapabilities
+// // union functional descriptor
+// 	0x05,
+// 	CS_INTERFACE,
+// 	0x06,
+// 	0x00,						// bMasterInterface
+// 	0x01,						// bSlaveInterface0
+// // notification EP
+// 	0x07,
+// 	DESC_ENDPOINT,
+// 	INT_IN_EP,					// bEndpointAddress
+// 	0x03,						// bmAttributes = intr
+// 	LE_WORD(8),					// wMaxPacketSize
+// 	0x0A,						// bInterval
+// // data class interface descriptor
+// 	0x09,
+// 	DESC_INTERFACE,
+// 	0x01,						// bInterfaceNumber
+// 	0x00,						// bAlternateSetting
+// 	0x02,						// bNumEndPoints
+// 	0x0A,						// bInterfaceClass = data
+// 	0x00,						// bInterfaceSubClass
+// 	0x00,						// bInterfaceProtocol
+// 	0x00,						// iInterface
+// // data EP OUT
+// 	0x07,
+// 	DESC_ENDPOINT,
+// 	BULK_OUT_EP,				// bEndpointAddress
+// 	0x02,						// bmAttributes = bulk
+// 	LE_WORD(MAX_PACKET_SIZE),	// wMaxPacketSize
+// 	0x00,						// bInterval
+// // data EP in
+// 	0x07,
+// 	DESC_ENDPOINT,
+// 	BULK_IN_EP,					// bEndpointAddress
+// 	0x02,						// bmAttributes = bulk
+// 	LE_WORD(MAX_PACKET_SIZE),	// wMaxPacketSize
+// 	0x00,						// bInterval
+//
+// 	// string descriptors
+// 	0x04,
+// 	DESC_STRING,
+// 	LE_WORD(0x0409),
+//
+// 	0x0E,
+// 	DESC_STRING,
+// 	'L', 0, 'P', 0, 'C', 0, 'U', 0, 'S', 0, 'B', 0,
+//
+// 	0x14,
+// 	DESC_STRING,
+// 	'U', 0, 'S', 0, 'B', 0, 'S', 0, 'e', 0, 'r', 0, 'i', 0, 'a', 0, 'l', 0,
+//
+// 	0x12,
+// 	DESC_STRING,
+// 	'D', 0, 'E', 0, 'A', 0, 'D', 0, 'C', 0, '0', 0, 'D', 0, 'E', 0,
+//
+// // terminating zero
+// 	0
+// };
 
-// device descriptor
-	0x12,
-	DESC_DEVICE,
-	LE_WORD(0x0101),			// bcdUSB
-	0x02,						// bDeviceClass
-	0x00,						// bDeviceSubClass
-	0x00,						// bDeviceProtocol
-	MAX_PACKET_SIZE0,			// bMaxPacketSize
-	LE_WORD(0xFFFF),			// idVendor
-	LE_WORD(0x0005),			// idProduct
-	LE_WORD(0x0100),			// bcdDevice
-	0x01,						// iManufacturer
-	0x02,						// iProduct
-	0x03,						// iSerialNumber
-	0x01,						// bNumConfigurations
+static const struct {
+	usbdesc_device				device;
+	usbdesc_configuration	config0;
+	usbdesc_interface			if0;
+	//U8										fd_header[5];
+	usbcdc_header					fd_header;
+	//U8										fd_callmgmt[5];
+	usbcdc_callmgmt				fd_callmgmt;
+	//U8										fd_acm[4];
+	usbcdc_acm						fd_acm;
+	//U8										fd_union[5];
+	usbcdc_union					fd_union;
+	usbdesc_endpoint			ep_notify;
+	usbdesc_interface			if_data;
+	usbdesc_endpoint			ep_bulkout;
+	usbdesc_endpoint			ep_bulkin;
+	usbdesc_language			st_language;
+	usbdesc_string_l(6)		st_Manufacturer;
+	usbdesc_string_l(9)		st_Product;
+	usbdesc_string_l(8)		st_Serial;
+	U8										end;
 
-// configuration descriptor
-	0x09,
-	DESC_CONFIGURATION,
-	LE_WORD(67),				// wTotalLength
-	0x02,						// bNumInterfaces
-	0x01,						// bConfigurationValue
-	0x00,						// iConfiguration
-	0xC0,						// bmAttributes
-	0x32,						// bMaxPower
-// control class interface
-	0x09,
-	DESC_INTERFACE,
-	0x00,						// bInterfaceNumber
-	0x00,						// bAlternateSetting
-	0x01,						// bNumEndPoints
-	0x02,						// bInterfaceClass
-	0x02,						// bInterfaceSubClass
-	0x01,						// bInterfaceProtocol, linux requires value of 1 for the cdc_acm module
-	0x00,						// iInterface
-// header functional descriptor
-	0x05,
-	CS_INTERFACE,
-	0x00,
-	LE_WORD(0x0110),
-// call management functional descriptor
-	0x05,
-	CS_INTERFACE,
-	0x01,
-	0x01,						// bmCapabilities = device handles call management
-	0x01,						// bDataInterface
-// ACM functional descriptor
-	0x04,
-	CS_INTERFACE,
-	0x02,
-	0x02,						// bmCapabilities
-// union functional descriptor
-	0x05,
-	CS_INTERFACE,
-	0x06,
-	0x00,						// bMasterInterface
-	0x01,						// bSlaveInterface0
-// notification EP
-	0x07,
-	DESC_ENDPOINT,
-	INT_IN_EP,					// bEndpointAddress
-	0x03,						// bmAttributes = intr
-	LE_WORD(8),					// wMaxPacketSize
-	0x0A,						// bInterval
-// data class interface descriptor
-	0x09,
-	DESC_INTERFACE,
-	0x01,						// bInterfaceNumber
-	0x00,						// bAlternateSetting
-	0x02,						// bNumEndPoints
-	0x0A,						// bInterfaceClass = data
-	0x00,						// bInterfaceSubClass
-	0x00,						// bInterfaceProtocol
-	0x00,						// iInterface
-// data EP OUT
-	0x07,
-	DESC_ENDPOINT,
-	BULK_OUT_EP,				// bEndpointAddress
-	0x02,						// bmAttributes = bulk
-	LE_WORD(MAX_PACKET_SIZE),	// wMaxPacketSize
-	0x00,						// bInterval
-// data EP in
-	0x07,
-	DESC_ENDPOINT,
-	BULK_IN_EP,					// bEndpointAddress
-	0x02,						// bmAttributes = bulk
-	LE_WORD(MAX_PACKET_SIZE),	// wMaxPacketSize
-	0x00,						// bInterval
-	
-	// string descriptors
-	0x04,
-	DESC_STRING,
-	LE_WORD(0x0409),
-
-	0x0E,
-	DESC_STRING,
-	'L', 0, 'P', 0, 'C', 0, 'U', 0, 'S', 0, 'B', 0,
-
-	0x14,
-	DESC_STRING,
-	'U', 0, 'S', 0, 'B', 0, 'S', 0, 'e', 0, 'r', 0, 'i', 0, 'a', 0, 'l', 0,
-
-	0x12,
-	DESC_STRING,
-	'D', 0, 'E', 0, 'A', 0, 'D', 0, 'C', 0, '0', 0, 'D', 0, 'E', 0,
-
-// terminating zero
-	0
+} abDescriptors = {
+	.device = {
+		DL_DEVICE,
+		DT_DEVICE,
+		.bcdUSB							= USB_VERSION_1_1,
+		.bDeviceClass				= UC_COMM,
+		.bDeviceSubClass		= 0,
+		.bDeviceProtocol		= 0,
+		.bMaxPacketSize			= MAX_PACKET_SIZE0,
+		.idVendor						= 0xFFFF,
+		.idProduct					= 0x0005,
+		.bcdDevice					= 0x0100,
+		.iManufacturer			= 0x01,
+		.iProduct						= 0x02,
+		.iSerialNumber			= 0x03,
+		.bNumConfigurations	= 1,
+	},
+	.config0 = {
+		DL_CONFIGURATION,
+		DT_CONFIGURATION,
+		.wTotalLength				= sizeof(usbdesc_configuration)
+												+ sizeof(usbdesc_interface)
+												+ 5
+												+ 5
+												+ 4
+												+ 5
+												+ sizeof(usbdesc_endpoint)
+												+ sizeof(usbdesc_interface)
+												+ sizeof(usbdesc_endpoint)
+												+ sizeof(usbdesc_endpoint)
+												,
+		.bNumInterfaces			= 2,
+		.bConfigurationValue = 1,
+		.iConfiguration			= 0,
+		.bmAttributes				= CA_BUSPOWERED,
+		.bMaxPower					= 100 mA,
+	},
+	.if0 = {
+		DL_INTERFACE,
+		DT_INTERFACE,
+		.bInterfaceNumber		= 0,
+		.bAlternateSetting	= 0,
+		.bNumEndPoints			= 1,
+		.bInterfaceClass		= UC_COMM,
+		.bInterfaceSubClass	= USB_CDC_SUBCLASS_ACM,
+		.bInterfaceProtocol	= 1, // linux requires value of 1 for the cdc_acm module
+		.iInterface					= 0,
+	},
+	.fd_header = {
+		USB_CDC_LENGTH_HEADER,
+		DT_CDC_DESCRIPTOR,
+		USB_CDC_SUBTYPE_HEADER,
+		.bcdCDC = 0x0110,
+	},
+	.fd_callmgmt = {
+		USB_CDC_LENGTH_CALLMGMT,
+		DT_CDC_DESCRIPTOR,
+		USB_CDC_SUBTYPE_CALL_MANAGEMENT,
+		.bmCapabilities = USB_CDC_CALLMGMT_CAP_CALLMGMT,
+		.bDataInterface = 1,
+	},
+	.fd_acm = {
+		USB_CDC_LENGTH_ACM,
+		DT_CDC_DESCRIPTOR,
+		USB_CDC_SUBTYPE_ACM,
+		.bmCapabilities = USB_CDC_ACM_CAP_LINE,
+	},
+	.fd_union = {
+		USB_CDC_LENGTH_UNION,
+		DT_CDC_DESCRIPTOR,
+		USB_CDC_SUBTYPE_UNION,
+		.bMasterInterface = 0,
+		.bSlaveInterface0 = 1,
+	},
+	.ep_notify = {
+		DL_ENDPOINT,
+		DT_ENDPOINT,
+		.bEndpointAddress = INT_IN_EP,
+		.bmAttributes = EA_INTERRUPT,
+		.wMaxPacketSize = 8,
+		.bInterval = 10,
+	},
+	.if_data = {
+		DL_INTERFACE,
+		DT_INTERFACE,
+		.bInterfaceNumber = 1,
+		.bAlternateSetting = 0,
+		.bNumEndPoints = 2,
+		.bInterfaceClass = UC_CDC_DATA,
+		.bInterfaceSubClass = 0,
+		.bInterfaceProtocol = 0,
+		.iInterface = 0,
+	},
+	.ep_bulkout = {
+		DL_ENDPOINT,
+		DT_ENDPOINT,
+		.bEndpointAddress = BULK_OUT_EP,
+		.bmAttributes = EA_BULK,
+		.wMaxPacketSize = MAX_PACKET_SIZE,
+		.bInterval = 0,
+	},
+	.ep_bulkin = {
+		DL_ENDPOINT,
+		DT_ENDPOINT,
+		.bEndpointAddress = BULK_IN_EP,
+		.bmAttributes = EA_BULK,
+		.wMaxPacketSize = MAX_PACKET_SIZE,
+		.bInterval = 0,
+	},
+	.st_language = {
+		.bLength = 4,
+		DT_STRING,
+		{ SL_USENGLISH, },
+	},
+	.st_Manufacturer = {
+		14,
+		DT_STRING,
+		{ 'L','P','C','U','S','B', },
+	},
+	.st_Product = {
+		20,
+		DT_STRING,
+		{ 'U','S','B','S','e','r','i','a','l', },
+	},
+	.st_Serial = {
+		18,
+		DT_STRING,
+		{ 'D','E','A','D','B','E','E','F', },
+	},
+	0,
 };
-
 
 /**
 	Local function to handle incoming bulk data
-		
+
 	@param [in] bEP
 	@param [in] bEPStatus
  */
@@ -261,7 +415,7 @@ static void BulkOut(U8 bEP, U8 bEPStatus)
 
 /**
 	Local function to handle outgoing bulk data
-		
+
 	@param [in] bEP
 	@param [in] bEPStatus
  */
@@ -282,7 +436,7 @@ static void BulkIn(U8 bEP, U8 bEPStatus)
 		}
 	}
 	iLen = i;
-	
+
 	// send over USB
 	if (iLen > 0) {
 		USBHwEPWrite(bEP, abBulkBuf, iLen);
@@ -292,7 +446,7 @@ static void BulkIn(U8 bEP, U8 bEPStatus)
 
 /**
 	Local function to handle the USB-CDC class requests
-		
+
 	@param [in] pSetup
 	@param [out] piLen
 	@param [out] ppbData
@@ -346,7 +500,7 @@ void VCOM_init(void)
 
 /**
 	Writes one character to VCOM port
-	
+
 	@param [in] c character to write
 	@returns character written, or EOF if character could not be written
  */
@@ -358,20 +512,20 @@ int VCOM_putchar(int c)
 
 /**
 	Reads one character from VCOM port
-	
+
 	@returns character read, or EOF if character could not be read
  */
 int VCOM_getchar(void)
 {
 	U8 c;
-	
+
 	return fifo_get(&rxfifo, &c) ? c : EOF;
 }
 
 
 /**
 	Interrupt handler
-	
+
 	Simply calls the USB ISR
  */
 //void USBIntHandler(void)
@@ -413,13 +567,21 @@ int main(void)
 
 	dbgled(1);
 
+// 	printf("abDescriptors  : ");
+// 	for (int i = 0; i < sizeof(abDescriptors); i++) {
+// 		printf("0x%02X ", ((uint8_t *) &abDescriptors)[i]);
+// 	}
+// 	printf("\nabDescriptors_s: ");
+// 	for (int i = 0; i < sizeof(abDescriptors_s); i++) {
+// 		printf("0x%02X ", abDescriptors_s[i]);
+// 	}
 	printf("Initialising USB stack\n");
 
 	// initialise stack
 	USBInit();
 
 	// register descriptors
-	USBRegisterDescriptors(abDescriptors);
+	USBRegisterDescriptors((uint8_t *) &abDescriptors);
 
 	// register class request handler
 	USBRegisterRequestHandler(REQTYPE_TYPE_CLASS, HandleClassRequest, abClassReqData);
@@ -428,29 +590,29 @@ int main(void)
 	USBHwRegisterEPIntHandler(INT_IN_EP, NULL);
 	USBHwRegisterEPIntHandler(BULK_IN_EP, BulkIn);
 	USBHwRegisterEPIntHandler(BULK_OUT_EP, BulkOut);
-	
+
 	// register frame handler
 	USBHwRegisterFrameHandler(USBFrameHandler);
 
 	// enable bulk-in interrupts on NAKs
 	USBHwNakIntEnable(INACK_BI);
-	
+
 	dbgled(2);
 
 	// initialise VCOM
 	VCOM_init();
 	printf("Starting USB communication\n");
 
-/* CodeRed - comment out original interrupt setup code	
+/* CodeRed - comment out original interrupt setup code
 	// set up USB interrupt
 	VICIntSelect &= ~(1<<22);               // select IRQ for USB
 	VICIntEnable |= (1<<22);
 
-	(*(&VICVectCntl0+INT_VECT_NUM)) = 0x20 | 22; // choose highest priority ISR slot 	
+	(*(&VICVectCntl0+INT_VECT_NUM)) = 0x20 | 22; // choose highest priority ISR slot
 	(*(&VICVectAddr0+INT_VECT_NUM)) = (int)USBIntHandler;
-	
+
 	enableIRQ();
-*/	
+*/
 
 // CodeRed - add in interrupt setup code for RDB1768
 
@@ -472,7 +634,7 @@ int main(void)
 	USBHwConnect(TRUE);
 
 	dbgled(8);
-	
+
 	volatile static int i = 0 ;
 
 	// echo any character received (do USB stuff in interrupt)
@@ -497,7 +659,7 @@ int main(void)
 				printf(".");
 			}
 
-// CodeRed 
+// CodeRed
 // Echo character back as is, or incremented, as per #define.
 			VCOM_putchar(c + INCREMENT_ECHO_BY );
 		}
