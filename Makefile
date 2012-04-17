@@ -90,6 +90,11 @@ $(OUTDIR)/%.o: %.c
 	@#$(CC) $(CFLAGS) -MM -MF $(df).d $<
 	@$(CC) $(CFLAGS) -c -o $@ $<
 
+$(OUTDIR)/%.o: drivers/Drivers/source/%.c
+	@echo "  CC    " $@
+	@#$(CC) $(CFLAGS) -MM -MF $(df).d $<
+	@$(CC) $(CFLAGS) -c -o $@ $<
+
 $(OUTDIR)/%.o: %.cpp
 	@echo "  CXX   " $@
 	@#$(CXX) $(CFLAGS) -MM -MF $(df).d $<
