@@ -104,7 +104,7 @@ typedef unsigned short uip_stats_t;
  *
  * \hideinitializer
  */
-#define UIP_CONF_BUFFER_SIZE     1520	
+#define UIP_CONF_BUFFER_SIZE     1520
 
 /**
  * CPU byte order.
@@ -118,14 +118,14 @@ typedef unsigned short uip_stats_t;
  *
  * \hideinitializer
  */
-#define UIP_CONF_LOGGING         1  
+#define UIP_CONF_LOGGING         1
 
 /**
  * UDP support on or off
  *
  * \hideinitializer
  */
-#define UIP_CONF_UDP             0	
+#define UIP_CONF_UDP             0
 
 /**
  * UDP checksums on or off
@@ -150,6 +150,8 @@ typedef unsigned short uip_stats_t;
 /*#include "dhcpc.h"*/
 /*#include "resolv.h"*/
 /*#include "webclient.h"*/
+
+#define UIP_APPCALL     httpd_appcall
 
 #endif /* __UIP_CONF_H__ */
 

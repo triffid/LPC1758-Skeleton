@@ -16,7 +16,7 @@ GPIO **leds = 0;
 
 void _dbg_init() {
 	if (dbg == 0) {
-		dbg = new UART(0, 9600);
+		dbg = new UART(0, 230400);
 	}
 }
 

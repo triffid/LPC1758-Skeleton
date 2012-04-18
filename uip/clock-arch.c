@@ -46,11 +46,11 @@ extern volatile UNS_32 systick_counter;
 
 /*--------------------------- clock_init ---------------------------------*/
 
-void clock_init(void)
-{
-	init_timer(CLOCK_CONF_SECOND);
-
-}
+// void clock_init(void)
+// {
+// 	init_timer(CLOCK_CONF_SECOND);
+//
+// }
 
 /*--------------------------- clock_time ---------------------------------*/
 

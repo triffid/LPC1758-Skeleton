@@ -8,9 +8,9 @@ CSRC     = $(wildcard *.c)
 CXXSRC   = $(wildcard *.cpp)
 ASRC     = $(wildcard *.S)
 
-SUBDIRS  = Drivers Core USB uip
+SUBDIRS  = Drivers Core
 
-INC      = inc $(patsubst %,%/inc, $(SUBDIRS)) $(dir $(shell find uip/ -name '*.h'))
+INC      = inc $(patsubst %,%/inc, $(SUBDIRS)) uip uip/webserver
 
 LIBRARIES =
 
@@ -21,11 +21,14 @@ OSRC     =
 NXPSRC   = $(shell find Drivers/ -name '*.c') $(shell find Core/ -name '*.c')
 NXPO     = $(patsubst %.c,$(OUTDIR)/%.o,$(notdir $(NXPSRC))) $(OUTDIR)/system_LPC17xx.o
 
-USBSRC   = $(shell find USB/ -name '*.c')
-USBO     = $(patsubst %.c,$(OUTDIR)/%.o,$(notdir $(USBSRC)))
-
 UIPSRC   = $(shell find uip/ -name '*.c')
 UIPO     = $(patsubst %.c,$(OUTDIR)/%.o,$(notdir $(UIPSRC)))
+
+#USBSRC   = $(shell find USB/ -name '*.c')
+#USBO     = $(patsubst %.c,$(OUTDIR)/%.o,$(notdir $(USBSRC)))
+
+#LWIPSRC  = $(shell find lwip/ -name '*.c')
+#LWIPO    = $(patsubst %.c,$(OUTDIR)/%.o,$(notdir $(LWIPSRC)))
 
 #DEPDIR   = .deps
 #df       = $(DEPDIR)/$(*F)
@@ -61,7 +64,7 @@ LDFLAGS += $(patsubst %,-L%,$(LIBRARIES)) -lc -lstdc++
 
 OBJ      = $(patsubst %,$(OUTDIR)/%,$(CSRC:.c=.o) $(CXXSRC:.cpp=.o) $(ASRC:.S=.o))
 
-VPATH    = . $(patsubst %/inc,%/src,$(INC)) $(dir $(NXPSRC)) $(dir $(USBSRC)) $(dir $(UIPSRC))
+VPATH    = . $(patsubst %/inc,%/src,$(INC)) $(dir $(NXPSRC)) $(dir $(USBSRC)) $(dir $(UIPSRC)) $(dir $(LWIPSRC))
 
 .PHONY: all clean program
 
@@ -89,7 +92,7 @@ $(OUTDIR)/%.hex: $(OUTDIR)/%.elf
 	@echo "  COPY  " $@
 	@$(OBJCOPY) -O ihex $< $@
 
-$(OUTDIR)/%.elf: $(OBJ) $(OUTDIR)/nxp.ar
+$(OUTDIR)/%.elf: $(OBJ) $(OUTDIR)/nxp.ar $(OUTDIR)/uip.ar
 	@echo "  LINK  " $@
 	@$(CXX) $^ $(OSRC) -o $@ $(LDFLAGS)
 
@@ -122,6 +125,10 @@ $(OUTDIR)/usb.ar: $(USBO)
 	@$(AR) ru $@ $^
 
 $(OUTDIR)/uip.ar: $(UIPO)
+	@echo "  AR    " $@
+	@$(AR) ru $@ $^
+
+$(OUTDIR)/lwip.ar: $(LWIPO)
 	@echo "  AR    " $@
 	@$(AR) ru $@ $^
 

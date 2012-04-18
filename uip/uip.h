@@ -1159,10 +1159,10 @@ struct uip_conn {
 /* 接收窗口中可以接收的下一字节序号*/
   u8_t rcv_nxt[4];    /**< The sequence number that we expect to
 			 receive next. */
-/* 发送窗口中下一个要发送字节的序号*/			 	
+/* 发送窗口中下一个要发送字节的序号*/
   u8_t snd_nxt[4];    /**< The sequence number that was last sent by
                          us. */
-/*发送窗口中已经发送但未被确认包的长度*/						 	
+/*发送窗口中已经发送但未被确认包的长度*/
   u16_t len;          /**< Length of the data that was previously sent. */
   u16_t mss;          /**< Current maximum segment size for the
 			 connection. */
@@ -1172,17 +1172,17 @@ struct uip_conn {
 			 variable. */
   u8_t sv;            /**< Retransmission time-out calculation state
 			 variable. */
-/*重发超时值*/			 	
+/*重发超时值*/
   u8_t rto;           /**< Retransmission time-out. */
   u8_t tcpstateflags; /**< TCP state and flags. */
-/* 每次perodic timer超时时timer-- ,见uip_proecess() */  
+/* 每次perodic timer超时时timer-- ,见uip_proecess() */
   u8_t timer;         /**< The retransmission timer. */
   /* 上一个包的重发次数*/
   u8_t nrtx;          /**< The number of retransmissions for the last
 			 segment sent. */
 
   /** The application state. */
-  uip_tcp_appstate_t appstate;
+  void * appstate;
 };
 
 
@@ -1321,7 +1321,7 @@ extern u8_t uip_flags;
 			       acked and the application should send
 			       out new data instead of retransmitting
 			       the last data. */
-/* 接收到的包里含有用户数据*/			       
+/* 接收到的包里含有用户数据*/
 #define UIP_NEWDATA   2     /* Flags the fact that the peer has sent
 			       us new data. */
 #define UIP_REXMIT    4     /* Tells the application to retransmit the
@@ -1339,7 +1339,7 @@ extern u8_t uip_flags;
 			       gone away. Or the application signals
 			       that it wants to abort the
 			       connection. */
-/*一个连接已经建立起来了(进入了ESTABLISHED状态)*/			      
+/*一个连接已经建立起来了(进入了ESTABLISHED状态)*/
 #define UIP_CONNECTED 64    /* We have got a connection from a remote
                                host and have set up a new connection
                                for it, or an active connection has

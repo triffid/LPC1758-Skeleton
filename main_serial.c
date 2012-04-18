@@ -74,6 +74,12 @@
 
 #include "clock.h"
 
+#include "uip.h"
+#include "uip_arp.h"
+
+// (BUF->len[0] << 8) + BUF->len[1]
+#define	ip_pkt_size(p) ((((struct uip_tcpip_hdr *) p)->len[0] << 8) + ((struct uip_tcpip_hdr *) p)->len[0])
+
 void dbgled(int l);
 
 // CodeRed
@@ -119,8 +125,49 @@ static U8 rxdata[VCOM_FIFO_SIZE];
 static fifo_t txfifo;
 static fifo_t rxfifo;
 
+static U8 usb_interrupt_bits;
+
+static U8 rx_packet_buffer[1536];
+static U8 * rx_packet_buffer_pointer;
+static volatile U8 rx_status;
+#define	RX_STATUS_WAIT_FOR_PACKET 0
+#define RX_STATUS_GOT_PACKET      1
+
+static U8 tx_packet_buffer[1536];
+static U8 * tx_packet_buffer_startpointer;
+static U8 * tx_packet_buffer_endpointer;
+static volatile U8 tx_status;
+#define	TX_STATUS_WAIT_FOR_PACKET 0
+#define TX_STATUS_GOT_PACKET      1
+
+#define v2h(v) (((v & 15) < 10)?('0' + (v & 15)):('A' + ((v & 15) - 10)))
+
+#define MAC_0 0xAE
+#define MAC_1 0xF0
+#define	MAC_2 0x28
+#define	MAC_3 0x5D
+#define	MAC_4 0x66
+#define	MAC_5 0x21
+
+#define IP_0	192
+#define	IP_1	168
+#define	IP_2	10
+#define	IP_3	65
+
+static const U8 macaddress_usb[6] = { MAC_0, MAC_1, MAC_2, MAC_3, MAC_4, MAC_5 };
+static const U8 macaddress_net[6] = { MAC_0, MAC_1, MAC_2, MAC_3, MAC_4, MAC_5 ^ 1 };
+
+void uip_log(char *msg) {
+	printf(msg);
+}
+
 // forward declaration of interrupt handler
 void USBIntHandler(void);
+
+void dbgledscroll() {
+	static int i;
+	dbgled((++i) >> 5);
+}
 
 static const struct {
 	usbdesc_device				device;
@@ -281,10 +328,50 @@ static const struct {
 	.st_MAC = {
 		26,
 		DT_STRING,
-		{ '0','6','2','D','2','8','3','A','9','D','3','B', },
+		{
+			v2h(MAC_0 >> 4),
+			v2h(MAC_0 & 15),
+			v2h(MAC_1 >> 4),
+			v2h(MAC_1 & 15),
+			v2h(MAC_2 >> 4),
+			v2h(MAC_2 & 15),
+			v2h(MAC_3 >> 4),
+			v2h(MAC_3 & 15),
+			v2h(MAC_4 >> 4),
+			v2h(MAC_4 & 15),
+			v2h(MAC_5 >> 4),
+			v2h(MAC_5 & 15),
+		},
 	},
 	0,
 };
+
+U8 isValidPacket(U8 *buf, U16 *len, U16 *pType) {
+	// first check dest mac
+	U8 *dst = buf;
+	//U8 *src = buf + 6;
+	U8 broadcast[] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+	if ((memcmp(macaddress_net, dst, 6) == 0) || (memcmp(broadcast, dst, 6) == 0)) {
+		U16 type = buf[12] << 8 | buf[13];
+		if (pType)
+			*pType = type;
+		U8 *iphdr = buf + 14;
+		if (type == UIP_ETHTYPE_IP) {
+			U16 length = (buf[16] << 8 | buf[17]) + (iphdr - buf);
+			if (len)
+				*len = length;
+			return 1;
+		}
+		if (type == UIP_ETHTYPE_ARP) {
+			if (len)
+				*len = 42;
+			return 1;
+		}
+	}
+	if (len)
+		*len = 0;
+	return 0;
+}
 
 /**
 	Local function to handle incoming bulk data
@@ -294,29 +381,75 @@ static const struct {
  */
 static void BulkOut(U8 bEP, U8 bEPStatus)
 {
-	int i, iLen;
+	U16 iLen, pLen;
 
-	printf("OUT EP %d", bEP);
+	printf("OUT EP [%02X:%02X] ", bEP, bEPStatus);
 
-	if (fifo_free(&rxfifo) < MAX_PACKET_SIZE) {
-		// may not fit into fifo
-		printf(" full\n");
+	if (rx_status != RX_STATUS_WAIT_FOR_PACKET) {
+		printf(" NACK!\n");
+		USBHwNakIntEnable(usb_interrupt_bits | INACK_BO);
 		return;
 	}
 
+// 	if (fifo_free(&rxfifo) < MAX_PACKET_SIZE) {
+// 		// may not fit into fifo
+// 		printf(" full\n");
+// 		return;
+// 	}
+
 	// get data from USB into intermediate buffer
-	iLen = USBHwEPRead(bEP, abBulkBuf, sizeof(abBulkBuf));
+// 	iLen = USBHwEPRead(bEP, abBulkBuf, sizeof(abBulkBuf));
+// 	i = sizeof(rx_packet_buffer);
+// 	if (rx_packet_buffer_pointer != rx_packet_buffer) {
+// 		if (isValidPacket(rx_packet_buffer, &pLen)) {
+// 			i = pLen - (rx_packet_buffer_pointer - rx_packet_buffer);
+// 		}
+// 		else {
+// 			rx_packet_buffer_pointer = rx_packet_buffer;
+// 		}
+// 	}
+//
+// 	if (rx_packet_buffer_pointer < rx_packet_buffer || rx_packet_buffer_pointer >= rx_packet_buffer + sizeof(rx_packet_buffer)) {
+// 		rx_packet_buffer_pointer = rx_packet_buffer;
+// 	}
 
-	printf(" got %d\n", iLen);
+	// now i (hopefully) holds the amount of bytes until the end of the ethernet frame, or MAX if the buffer is empty
 
-	for (i = 0; i < iLen; i++) {
-		// put into FIFO
-		if (!fifo_put(&rxfifo, abBulkBuf[i])) {
-			// overflow... :(
-			ASSERT(FALSE);
-			break;
+// 	printf("->%d", rx_packet_buffer_pointer - rx_packet_buffer);
+
+	iLen = USBHwEPRead(bEP, rx_packet_buffer_pointer, MAX_PACKET_SIZE);
+
+	printf("%d:", iLen);
+
+	for (int j = 0; j < iLen; j++) {
+		printf(",0x%02x", rx_packet_buffer_pointer[j]);
+	}
+
+// 	i -= iLen;
+
+	if (isValidPacket(rx_packet_buffer, &pLen, NULL)) {
+		rx_packet_buffer_pointer += iLen;
+
+		printf(" got %d, frame bytes %d of %d\n", iLen, rx_packet_buffer_pointer - rx_packet_buffer, pLen);
+
+		if (rx_packet_buffer_pointer >= rx_packet_buffer + pLen) {
+			rx_status = RX_STATUS_GOT_PACKET;
+			USBHwEPStall(bEP, 1);
 		}
 	}
+	else {
+		printf(" INVALID, dropping\n");
+		rx_packet_buffer_pointer = rx_packet_buffer;
+	}
+//
+// 	for (i = 0; i < iLen; i++) {
+// 		// put into FIFO
+// 		if (!fifo_put(&rxfifo, abBulkBuf[i])) {
+// 			// overflow... :(
+// 			ASSERT(FALSE);
+// 			break;
+// 		}
+// 	}
 }
 
 
@@ -328,31 +461,58 @@ static void BulkOut(U8 bEP, U8 bEPStatus)
  */
 static void BulkIn(U8 bEP, U8 bEPStatus)
 {
-	int i, iLen;
+	int iLen;
 
-	printf("IN EP %d", bEP);
+	printf("IN EP [%02X:%02X]", bEP, bEPStatus);
 
-	if (fifo_avail(&txfifo) == 0) {
-		// no more data, disable further NAK interrupts until next USB frame
-		USBHwNakIntEnable(0);
-		printf(" empty\n");
+	if ((bEPStatus & EP_STATUS_NACKED) == 0)
 		return;
+
+	if (tx_packet_buffer_startpointer < tx_packet_buffer_endpointer) {
+		iLen = tx_packet_buffer_endpointer - tx_packet_buffer_startpointer;
+
+		if (iLen > 64)
+			iLen = 64;
+
+		printf(" Sending %d:", iLen);
+		for (int i = 0; i < iLen; i++)
+			printf("_%02X", tx_packet_buffer_startpointer[i]);
+
+		if (USBHwEPWrite(bEP, tx_packet_buffer_startpointer, iLen))
+			tx_packet_buffer_startpointer += iLen;
 	}
 
-	// get bytes from transmit FIFO into intermediate buffer
-	for (i = 0; i < MAX_PACKET_SIZE; i++) {
-		if (!fifo_get(&txfifo, &abBulkBuf[i])) {
-			break;
-		}
+	if (tx_packet_buffer_startpointer >= tx_packet_buffer_endpointer) {
+		USBHwNakIntEnable(usb_interrupt_bits &= ~INACK_BI);
+		tx_status = TX_STATUS_WAIT_FOR_PACKET;
+		printf(" FIN\n");
 	}
-	iLen = i;
-
-	printf(" sent %d\n", iLen);
-
-	// send over USB
-	if (iLen > 0) {
-		USBHwEPWrite(bEP, abBulkBuf, iLen);
+	else {
+		printf("...cont\n");
 	}
+
+
+// 	if (fifo_avail(&txfifo) == 0) {
+// 		// no more data, disable further NAK interrupts until next USB frame
+// 		USBHwNakIntEnable(usb_interrupt_bits &= ~INACK_BI);
+// 		printf(" empty\n");
+// 		return;
+// 	}
+//
+// 	// get bytes from transmit FIFO into intermediate buffer
+// 	for (i = 0; i < MAX_PACKET_SIZE; i++) {
+// 		if (!fifo_get(&txfifo, &abBulkBuf[i])) {
+// 			break;
+// 		}
+// 	}
+// 	iLen = i;
+//
+// 	printf(" sent %d\n", iLen);
+//
+// 	// send over USB
+// 	if (iLen > 0) {
+// 		USBHwEPWrite(bEP, abBulkBuf, iLen);
+// 	}
 }
 
 
@@ -445,28 +605,63 @@ int VCOM_getchar(void)
 //void USBIntHandler(void)
 void USB_IRQHandler(void)
 {
+	//dbgledscroll();
 	USBHwISR();
 //	dbgled(0);
 }
 
+typedef struct {
+	U32 timeout;
+	volatile U32 trigger_time;
+	volatile U8 flag;
+} timer;
+
+timer timers[] = {
+	{
+		50,
+		50,
+		0,
+	},
+	{
+		500,
+		500,
+		0,
+	},
+	{ 0, 0, 0, },
+};
+
+timer *timer_1_2s = &timers[0];
+timer *timer_10s = &timers[1];
+
 /**
  * SysTick IRQ
  */
+U32 time;
 void SysTick_Handler(void) {
-	static int l;
-	dbgled((++l) >> 5);
+	time++;
+	//dbgled((time >> 5) & 0xFF);
+	for (int i = 0; timers[i].timeout != 0; i++) {
+		if (time == timers[i].trigger_time) {
+			if (timers[i].flag != 255)
+				timers[i].flag++;
+			timers[i].trigger_time += timers[i].timeout;
+		}
+	}
 }
 
 static void USBFrameHandler(U16 wFrame)
 {
-	if (fifo_avail(&txfifo) > 0) {
+	//if (fifo_avail(&txfifo) > 0) {
 		// data available, enable NAK interrupt on bulk in
-		USBHwNakIntEnable(INACK_BI);
-	}
+
+	//TODO: work out why enabling this makes things lock up
+	if (tx_status == TX_STATUS_GOT_PACKET)
+		USBHwNakIntEnable(usb_interrupt_bits |= INACK_BI);
+
+	//}
 }
 
 //void enable_USB_interrupts(void);
-
 
 /*************************************************************************
 	main
@@ -475,28 +670,40 @@ static void USBFrameHandler(U16 wFrame)
 int main(void)
 {
 	int c;
+	uip_ipaddr_t ipaddr;	/* local IP address */
 
 	dbgled(0);
-
-	//NVIC_DeInit();
-	//NVIC_SCBDeInit();
-	//NVIC_SetVTOR((uint32_t) &__cs3_interrupt_vector_cortex_m);
-
-	//extern void* __cs3_interrupt_vector_cortex_m;
-	//printf("VTOR is %p = 0x%08lX\n", &__cs3_interrupt_vector_cortex_m, SCB->VTOR);
 
 	clock_init();
 
 	dbgled(1);
 
-// 	printf("abDescriptors  : ");
-// 	for (int i = 0; i < sizeof(abDescriptors); i++) {
-// 		printf("0x%02X ", ((uint8_t *) &abDescriptors)[i]);
-// 	}
-// 	printf("\nabDescriptors_s: ");
-// 	for (int i = 0; i < sizeof(abDescriptors_s); i++) {
-// 		printf("0x%02X ", abDescriptors_s[i]);
-// 	}
+	printf("Initialising uIP\n");
+
+	uip_init();
+
+	//printf("Setting MAC Address\n");
+	//struct uip_eth_addr mac;
+	//memcpy(&mac, macaddress_net, 6);
+	//uip_setethaddr(mac);
+
+	printf("Setting Netmask\n");
+
+	uip_ipaddr(ipaddr, 255,255,255,0);
+	uip_setnetmask(ipaddr);	/* mask */
+
+	//uip_ipaddr(ipaddr, 192,168,10,1);
+	//uip_setdraddr(ipaddr);	/* router IP address */
+
+	printf("Setting IP address\n");
+
+	uip_ipaddr(ipaddr, IP_0,IP_1,IP_2,IP_3);
+	uip_sethostaddr(ipaddr);	/* host IP address */
+
+	printf("Starting HTTPd\n");
+
+	httpd_init();
+
 	printf("Initialising USB stack\n");
 
 	// initialise stack
@@ -517,26 +724,13 @@ int main(void)
 	USBHwRegisterFrameHandler(USBFrameHandler);
 
 	// enable bulk-in interrupts on NAKs
-	USBHwNakIntEnable(INACK_BI);
+// 	USBHwNakIntEnable(usb_interrupt_bits |= INACK_BI);
 
 	dbgled(2);
 
 	// initialise VCOM
 	VCOM_init();
 	printf("Starting USB communication\n");
-
-/* CodeRed - comment out original interrupt setup code
-	// set up USB interrupt
-	VICIntSelect &= ~(1<<22);               // select IRQ for USB
-	VICIntEnable |= (1<<22);
-
-	(*(&VICVectCntl0+INT_VECT_NUM)) = 0x20 | 22; // choose highest priority ISR slot
-	(*(&VICVectAddr0+INT_VECT_NUM)) = (int)USBIntHandler;
-
-	enableIRQ();
-*/
-
-// CodeRed - add in interrupt setup code for RDB1768
 
 	dbgled(3);
 
@@ -570,23 +764,89 @@ int main(void)
 		USBHwISR();
 
 #endif
-		if (cansend()) {
-			c = VCOM_getchar();
-			if (c != EOF) {
-				// show on console
-	// 			if ((c == 9) || (c == 10) || (c == 13) || ((c >= 32) && (c <= 126))) {
-	// 				printf("%c", c);
-	// 			}
-	// 			else {
-	// 				printf(".");
-	// 			}
-				printf("%02x,", c);
 
-	// CodeRed
-	// Echo character back as is, or incremented, as per #define.
-				//VCOM_putchar(c + INCREMENT_ECHO_BY );
+		//if (cansend()) {
+			if (rx_status == RX_STATUS_GOT_PACKET) {
+				U16 pLen = rx_packet_buffer_pointer - rx_packet_buffer;
+				U16 pType;
+				printf("packet drain %d bytes\n", pLen);
+				if (isValidPacket(rx_packet_buffer, NULL, &pType)) {
+					if (pType == UIP_ETHTYPE_ARP) {
+						struct arp_hdr *arp = (struct arp_hdr *) rx_packet_buffer;
+						U8 *srcip = (U8 *) &arp->sipaddr[0];
+						U8 *srcmac = (U8 *) &arp->shwaddr;
+						U8 *dstip = (U8 *) &arp->dipaddr[0];
+						U8 *dstmac = (U8 *) &arp->dhwaddr;
+						U8 op = (arp->opcode >> 8);
+						printf("ARP: %d.%d.%d.%d (%02X:%02X:%02X:%02X:%02X:%02X)",
+								srcip[0], srcip[1], srcip[2], srcip[3],
+								srcmac[0], srcmac[1], srcmac[2], srcmac[3], srcmac[4], srcmac[5]
+						);
+						printf(" [%d]", op);
+						if (op == 1) {
+							printf(" is looking for ");
+							printf("ARP: %d.%d.%d.%d",
+									dstip[0], dstip[1], dstip[2], dstip[3]
+							);
+							if (memcmp(dstip, ipaddr, 4) == 0){
+								printf(" ... That's me! Replying...");
+								struct arp_hdr * response = (struct arp_hdr *) tx_packet_buffer;
+								memcpy(response, arp, sizeof(struct arp_hdr));
+								response->opcode = 0x200;
+								memcpy(&response->ethhdr.dest, srcmac, 6);
+								memcpy(&response->ethhdr.src, macaddress_net, 6);
+								memcpy(&response->sipaddr, ipaddr, 4);
+								memcpy(&response->shwaddr, macaddress_net, 6);
+								memcpy(&response->dipaddr, srcip, 4);
+								memcpy(&response->dhwaddr, srcmac, 6);
+								tx_packet_buffer_startpointer = tx_packet_buffer;
+								tx_packet_buffer_endpointer = tx_packet_buffer + sizeof(struct arp_hdr);
+								tx_status = TX_STATUS_GOT_PACKET;
+								//USBHwNakIntEnable(usb_interrupt_bits |= INACK_BI);
+							}
+						}
+						else {
+							printf(" is at ");
+							printf("ARP: %d.%d.%d.%d (%02X:%02X:%02X:%02X:%02X:%02X)",
+									dstip[0], dstip[1], dstip[2], dstip[3],
+									dstmac[0], dstmac[1], dstmac[2], dstmac[3], dstmac[4], dstmac[5]
+							);
+						}
+						printf("\n");
+					}
+				}
+				rx_status = RX_STATUS_WAIT_FOR_PACKET;
+				rx_packet_buffer_pointer = rx_packet_buffer;
+				USBHwEPStall(BULK_OUT_EP, 0);
 			}
-		}
+			if (timer_1_2s->flag) {
+				timer_1_2s->flag = 0;
+				for(int i = 0; i < UIP_CONNS; i++)
+				{
+					//uip_periodic(i);
+					/* If the above function invocation resulted in data that
+					 *    should be sent out on the network, the global variable
+					 *    uip_len is set to a value > 0. */
+					if(uip_len > 0) {
+						//uip_arp_out();
+						//TODO: send data
+						//tapdev_send(uip_buf,uip_len);
+					}
+				}
+			}
+			if (timer_10s->flag) {
+				timer_10s->flag = 0;
+				//uip_arp_timer();
+				printf("timer 10s TX%d RX%d INT%d BIN:0x%02X BOUT:0x%02X\n", tx_status, rx_status, usb_interrupt_bits, USBHwEPGetStatus(BULK_IN_EP), USBHwEPGetStatus(BULK_OUT_EP));
+			}
+			else {
+				c = VCOM_getchar();
+				if (c != EOF) {
+					printf("%02x,", c);
+				}
+			}
+		//}
+		//dbgledscroll();
 	}
 
 	return 0;
