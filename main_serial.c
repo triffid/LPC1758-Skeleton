@@ -72,6 +72,8 @@
 
 #include "descriptor.h"
 
+#include "clock.h"
+
 void dbgled(int l);
 
 // CodeRed
@@ -443,12 +445,17 @@ int VCOM_getchar(void)
 //void USBIntHandler(void)
 void USB_IRQHandler(void)
 {
-	static int l;
-	dbgled((++l) >> 8);
 	USBHwISR();
 //	dbgled(0);
 }
 
+/**
+ * SysTick IRQ
+ */
+void SysTick_Handler(void) {
+	static int l;
+	dbgled((++l) >> 5);
+}
 
 static void USBFrameHandler(U16 wFrame)
 {
@@ -477,6 +484,8 @@ int main(void)
 
 	//extern void* __cs3_interrupt_vector_cortex_m;
 	//printf("VTOR is %p = 0x%08lX\n", &__cs3_interrupt_vector_cortex_m, SCB->VTOR);
+
+	clock_init();
 
 	dbgled(1);
 
@@ -548,12 +557,12 @@ int main(void)
 
 	dbgled(8);
 
-	volatile static int i = 0 ;
+// 	volatile static int i = 0 ;
 
 	// echo any character received (do USB stuff in interrupt)
 	while (1) {
 
-		i++ ;
+// 		i++ ;
 
 		// CodeRed - add option to use polling rather than interrupt
 #ifdef POLLED_USBSERIAL
@@ -561,20 +570,22 @@ int main(void)
 		USBHwISR();
 
 #endif
+		if (cansend()) {
+			c = VCOM_getchar();
+			if (c != EOF) {
+				// show on console
+	// 			if ((c == 9) || (c == 10) || (c == 13) || ((c >= 32) && (c <= 126))) {
+	// 				printf("%c", c);
+	// 			}
+	// 			else {
+	// 				printf(".");
+	// 			}
+				printf("%02x,", c);
 
-		c = VCOM_getchar();
-		if (c != EOF) {
-			// show on console
-			if ((c == 9) || (c == 10) || (c == 13) || ((c >= 32) && (c <= 126))) {
-				printf("%c", c);
+	// CodeRed
+	// Echo character back as is, or incremented, as per #define.
+				//VCOM_putchar(c + INCREMENT_ECHO_BY );
 			}
-			else {
-				printf(".");
-			}
-
-// CodeRed
-// Echo character back as is, or incremented, as per #define.
-			//VCOM_putchar(c + INCREMENT_ECHO_BY );
 		}
 	}
 

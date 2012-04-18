@@ -13,6 +13,7 @@ class UART {
 		~UART();
 		void send(uint8_t *buf, uint32_t buflen);
 		uint32_t recv(uint8_t *buf, uint32_t buflen);
+		uint8_t cansend();
 };
 
 #endif /* _UART_HPP */

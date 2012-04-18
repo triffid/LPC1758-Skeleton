@@ -104,3 +104,8 @@ void UART::send(uint8_t *buf, uint32_t buflen) {
 uint32_t UART::recv(uint8_t *buf, uint32_t buflen) {
 	return UART_Receive(u, buf, buflen, NONE_BLOCKING);
 }
+uint8_t UART::cansend() {
+	if (UART_CheckBusy(u) == SET)
+		return 1;
+	return 0;
+}

@@ -35,12 +35,20 @@ void _dbgled_init() {
 	}
 }
 
+uint8_t _cansend() {
+	return dbg->cansend();
+}
+
 extern "C" {
 	void init_nvic() {
 		NVIC_DeInit();
 		NVIC_SCBDeInit();
 		extern void* __cs3_interrupt_vector_cortex_m;
 		NVIC_SetVTOR((uint32_t) &__cs3_interrupt_vector_cortex_m);
+	}
+
+	uint8_t cansend() {
+		return _cansend();
 	}
 
 	void dbgled(int l) {
