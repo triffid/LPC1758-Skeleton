@@ -108,7 +108,7 @@ typedef struct {
 } TLineCoding;
 
 static TLineCoding LineCoding = {115200, 0, 0, 8};
-static U8 abBulkBuf[64];
+static U8 abBulkBuf[128];
 static U8 abClassReqData[8];
 
 static U8 txdata[VCOM_FIFO_SIZE];
@@ -294,13 +294,19 @@ static void BulkOut(U8 bEP, U8 bEPStatus)
 {
 	int i, iLen;
 
+	printf("OUT EP %d", bEP);
+
 	if (fifo_free(&rxfifo) < MAX_PACKET_SIZE) {
 		// may not fit into fifo
+		printf(" full\n");
 		return;
 	}
 
 	// get data from USB into intermediate buffer
 	iLen = USBHwEPRead(bEP, abBulkBuf, sizeof(abBulkBuf));
+
+	printf(" got %d\n", iLen);
+
 	for (i = 0; i < iLen; i++) {
 		// put into FIFO
 		if (!fifo_put(&rxfifo, abBulkBuf[i])) {
@@ -322,9 +328,12 @@ static void BulkIn(U8 bEP, U8 bEPStatus)
 {
 	int i, iLen;
 
+	printf("IN EP %d", bEP);
+
 	if (fifo_avail(&txfifo) == 0) {
 		// no more data, disable further NAK interrupts until next USB frame
 		USBHwNakIntEnable(0);
+		printf(" empty\n");
 		return;
 	}
 
@@ -335,6 +344,8 @@ static void BulkIn(U8 bEP, U8 bEPStatus)
 		}
 	}
 	iLen = i;
+
+	printf(" sent %d\n", iLen);
 
 	// send over USB
 	if (iLen > 0) {
@@ -432,9 +443,10 @@ int VCOM_getchar(void)
 //void USBIntHandler(void)
 void USB_IRQHandler(void)
 {
-	dbgled(8);
+	static int l;
+	dbgled((++l) >> 8);
 	USBHwISR();
-	dbgled(0);
+//	dbgled(0);
 }
 
 
@@ -463,8 +475,8 @@ int main(void)
 	//NVIC_SCBDeInit();
 	//NVIC_SetVTOR((uint32_t) &__cs3_interrupt_vector_cortex_m);
 
-	extern void* __cs3_interrupt_vector_cortex_m;
-	printf("VTOR is %p = 0x%08lX\n", &__cs3_interrupt_vector_cortex_m, SCB->VTOR);
+	//extern void* __cs3_interrupt_vector_cortex_m;
+	//printf("VTOR is %p = 0x%08lX\n", &__cs3_interrupt_vector_cortex_m, SCB->VTOR);
 
 	dbgled(1);
 
@@ -562,7 +574,7 @@ int main(void)
 
 // CodeRed
 // Echo character back as is, or incremented, as per #define.
-			VCOM_putchar(c + INCREMENT_ECHO_BY );
+			//VCOM_putchar(c + INCREMENT_ECHO_BY );
 		}
 	}
 

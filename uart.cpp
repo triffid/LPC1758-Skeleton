@@ -57,7 +57,7 @@ UART::UART(uint8_t port, uint32_t baud) {
 
 	UART_TxCmd(u, ENABLE);
 
-	uint8_t ofdr, odlm, odll,olcr,oter;
+	/*uint8_t ofdr, odlm, odll,olcr,oter;
 
 	olcr = u->LCR;
 	u->LCR = 0x83;
@@ -89,7 +89,7 @@ UART::UART(uint8_t port, uint32_t baud) {
 	blen = snprintf((char *) buf, sizeof(buf), "DLL=%d\n", odll);
 	send(buf, blen);
 	blen = snprintf((char *) buf, sizeof(buf), "TER=%d\n", oter);
-	send(buf, blen);
+	send(buf, blen);*/
 }
 
 UART::~UART() {
