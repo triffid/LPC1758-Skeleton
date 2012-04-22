@@ -86,7 +86,7 @@
 /** Installed device interrupt handler */
 static TFnDevIntHandler *_pfnDevIntHandler = NULL;
 /** Installed endpoint interrupt handlers */
-static TFnEPIntHandler	*_apfnEPIntHandlers[16];
+static TFnEPIntHandler	*_apfnEPIntHandlers[32];
 /** Installed frame interrupt handlers */
 static TFnFrameHandler	*_pfnFrameHandler = NULL;
 
@@ -233,7 +233,7 @@ void USBHwRegisterEPIntHandler(U8 bEP, TFnEPIntHandler *pfnHandler)
 	ASSERT(idx<32);
 
 	/* add handler to list of EP handlers */
-	_apfnEPIntHandlers[idx / 2] = pfnHandler;
+	_apfnEPIntHandlers[idx] = pfnHandler;
 
 	/* enable EP interrupt */
 	LPC_USB->USBEpIntEn |= (1 << idx);
@@ -391,7 +391,7 @@ int USBHwEPWrite(U8 bEP, U8 *pbBuf, int iLen)
  */
 int USBHwEPRead(U8 bEP, U8 *pbBuf, int iMaxLen)
 {
-	int i, idx;
+	int i, idx, j;
 	U32	dwData, dwLen;
 
 	idx = EP2IDX(bEP);
@@ -412,17 +412,23 @@ int USBHwEPRead(U8 bEP, U8 *pbBuf, int iMaxLen)
 	// get length
 	dwLen &= PKT_LNGTH_MASK;
 
+	printf("[RDEP%02X:%d/%d", bEP, dwLen, iMaxLen);
+
 	// get data
 	dwData = 0;
-	for (i = 0; i < dwLen; i++) {
-		if ((i % 4) == 0) {
+	for (i = 0, j = 0; LPC_USB->USBCtrl & RD_EN; i += 4) {
+		//if ((i % 4) == 0) {
 			dwData = LPC_USB->USBRxData;
+		//}
+		for (j=0; j < 4; j++) {
+			if ((pbBuf != NULL) && ((i + j) < iMaxLen)) {
+				pbBuf[(i + j)] = dwData & 0xFF;
+			}
+			dwData >>= 8;
 		}
-		if ((pbBuf != NULL) && (i < iMaxLen)) {
-			pbBuf[i] = dwData & 0xFF;
-		}
-		dwData >>= 8;
 	}
+
+	printf(":%d]", i + j);
 
 	// make sure RD_EN is clear
 	LPC_USB->USBCtrl = 0;
@@ -523,9 +529,9 @@ void USBHwISR(void)
 						((bEPStat & EPSTAT_EPN) ? EP_STATUS_NACKED : 0) |
 						((bEPStat & EPSTAT_PO) ? EP_STATUS_ERROR : 0);
 				// call handler
-				if (_apfnEPIntHandlers[i / 2] != NULL) {
+				if (_apfnEPIntHandlers[i] != NULL) {
 					DEBUG_LED_ON(7);
-					_apfnEPIntHandlers[i / 2](IDX2EP(i), bStat);
+					_apfnEPIntHandlers[i](IDX2EP(i), bStat);
 					DEBUG_LED_OFF(7);
 				}
 			}

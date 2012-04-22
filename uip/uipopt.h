@@ -124,7 +124,7 @@
  *
  * \hideinitializer
  */
-#define UIP_FIXEDETHADDR 1
+#define UIP_FIXEDETHADDR 0
 
 #define UIP_ETHADDR0    0x00  /**< The first octet of the Ethernet
 				 address if UIP_FIXEDETHADDR is

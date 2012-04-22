@@ -1,4 +1,4 @@
-//#define POLLED_USBSERIAL TRUE
+#define POLLED_USBSERIAL TRUE
 
 
 /*
@@ -116,24 +116,24 @@ typedef struct {
 } TLineCoding;
 
 static TLineCoding LineCoding = {115200, 0, 0, 8};
-static U8 abBulkBuf[128];
+//static U8 abBulkBuf[128];
 static U8 abClassReqData[8];
 
-static U8 txdata[VCOM_FIFO_SIZE];
-static U8 rxdata[VCOM_FIFO_SIZE];
+//static U8 txdata[VCOM_FIFO_SIZE];
+//static U8 rxdata[VCOM_FIFO_SIZE];
 
-static fifo_t txfifo;
-static fifo_t rxfifo;
+//static fifo_t txfifo;
+//static fifo_t rxfifo;
 
 static U8 usb_interrupt_bits;
 
-static U8 rx_packet_buffer[1536];
+static U8 __attribute__ ((align (4),section (".buffers"))) rx_packet_buffer[1536];
 static U8 * rx_packet_buffer_pointer;
 static volatile U8 rx_status;
 #define	RX_STATUS_WAIT_FOR_PACKET 0
 #define RX_STATUS_GOT_PACKET      1
 
-static U8 tx_packet_buffer[1536];
+static U8 __attribute__ ((align (4),section (".buffers"))) tx_packet_buffer[1536];
 static U8 * tx_packet_buffer_startpointer;
 static U8 * tx_packet_buffer_endpointer;
 static volatile U8 tx_status;
@@ -387,7 +387,7 @@ static void BulkOut(U8 bEP, U8 bEPStatus)
 
 	if (rx_status != RX_STATUS_WAIT_FOR_PACKET) {
 		printf(" NACK!\n");
-		USBHwNakIntEnable(usb_interrupt_bits | INACK_BO);
+		USBHwNakIntEnable(usb_interrupt_bits &= ~INACK_BO);
 		return;
 	}
 
@@ -434,7 +434,8 @@ static void BulkOut(U8 bEP, U8 bEPStatus)
 
 		if (rx_packet_buffer_pointer >= rx_packet_buffer + pLen) {
 			rx_status = RX_STATUS_GOT_PACKET;
-			USBHwEPStall(bEP, 1);
+			USBHwNakIntEnable(usb_interrupt_bits &= ~INACK_BO);
+			//USBHwEPStall(bEP, 1);
 		}
 	}
 	else {
@@ -465,8 +466,8 @@ static void BulkIn(U8 bEP, U8 bEPStatus)
 
 	printf("IN EP [%02X:%02X]", bEP, bEPStatus);
 
-	if ((bEPStatus & EP_STATUS_NACKED) == 0)
-		return;
+// 	if ((bEPStatus & EP_STATUS_NACKED) == 0)
+// 		return;
 
 	if (tx_packet_buffer_startpointer < tx_packet_buffer_endpointer) {
 		iLen = tx_packet_buffer_endpointer - tx_packet_buffer_startpointer;
@@ -486,6 +487,7 @@ static void BulkIn(U8 bEP, U8 bEPStatus)
 		USBHwNakIntEnable(usb_interrupt_bits &= ~INACK_BI);
 		tx_status = TX_STATUS_WAIT_FOR_PACKET;
 		printf(" FIN\n");
+		//USBHwEPStall(bEP, 1);
 	}
 	else {
 		printf("...cont\n");
@@ -565,11 +567,11 @@ static BOOL HandleClassRequest(TSetupPacket *pSetup, int *piLen, U8 **ppbData)
 	Initialises the VCOM port.
 	Call this function before using VCOM_putchar or VCOM_getchar
  */
-void VCOM_init(void)
-{
-	fifo_init(&txfifo, txdata);
-	fifo_init(&rxfifo, rxdata);
-}
+// void VCOM_init(void)
+// {
+// 	fifo_init(&txfifo, txdata);
+// 	fifo_init(&rxfifo, rxdata);
+// }
 
 
 /**
@@ -578,10 +580,10 @@ void VCOM_init(void)
 	@param [in] c character to write
 	@returns character written, or EOF if character could not be written
  */
-int VCOM_putchar(int c)
-{
-	return fifo_put(&txfifo, c) ? c : EOF;
-}
+// int VCOM_putchar(int c)
+// {
+// 	return fifo_put(&txfifo, c) ? c : EOF;
+// }
 
 
 /**
@@ -589,12 +591,12 @@ int VCOM_putchar(int c)
 
 	@returns character read, or EOF if character could not be read
  */
-int VCOM_getchar(void)
-{
-	U8 c;
-
-	return fifo_get(&rxfifo, &c) ? c : EOF;
-}
+// int VCOM_getchar(void)
+// {
+// 	U8 c;
+//
+// 	return fifo_get(&rxfifo, &c) ? c : EOF;
+// }
 
 
 /**
@@ -655,10 +657,19 @@ static void USBFrameHandler(U16 wFrame)
 		// data available, enable NAK interrupt on bulk in
 
 	//TODO: work out why enabling this makes things lock up
-	if (tx_status == TX_STATUS_GOT_PACKET)
-		USBHwNakIntEnable(usb_interrupt_bits |= INACK_BI);
+	//if (tx_status == TX_STATUS_GOT_PACKET)
+		//USBHwNakIntEnable(usb_interrupt_bits = INACK_BI);
 
 	//}
+}
+
+void txpacket(void *packet, int len) {
+	while (tx_status == TX_STATUS_GOT_PACKET);
+	memcpy(tx_packet_buffer, packet, len);
+	tx_packet_buffer_startpointer = tx_packet_buffer;
+	tx_packet_buffer_endpointer = tx_packet_buffer + len;
+	tx_status = TX_STATUS_GOT_PACKET;
+	//USBHwNakIntEnable(usb_interrupt_bits = INACK_BI);
 }
 
 //void enable_USB_interrupts(void);
@@ -669,7 +680,7 @@ static void USBFrameHandler(U16 wFrame)
 **************************************************************************/
 int main(void)
 {
-	int c;
+	//int c;
 	uip_ipaddr_t ipaddr;	/* local IP address */
 
 	dbgled(0);
@@ -682,10 +693,12 @@ int main(void)
 
 	uip_init();
 
-	//printf("Setting MAC Address\n");
-	//struct uip_eth_addr mac;
-	//memcpy(&mac, macaddress_net, 6);
-	//uip_setethaddr(mac);
+	uip_arp_init();
+
+	printf("Setting MAC Address\n");
+	struct uip_eth_addr mac;
+	memcpy(&mac, macaddress_net, 6);
+	uip_setethaddr(mac);
 
 	printf("Setting Netmask\n");
 
@@ -717,8 +730,8 @@ int main(void)
 
 	// register endpoint handlers
 	USBHwRegisterEPIntHandler(INT_IN_EP, NULL);
-	USBHwRegisterEPIntHandler(BULK_IN_EP, BulkIn);
-	USBHwRegisterEPIntHandler(BULK_OUT_EP, BulkOut);
+	USBHwRegisterEPIntHandler(BULK_IN_EP, NULL);
+	USBHwRegisterEPIntHandler(BULK_OUT_EP, NULL);
 
 	// register frame handler
 	USBHwRegisterFrameHandler(USBFrameHandler);
@@ -729,7 +742,7 @@ int main(void)
 	dbgled(2);
 
 	// initialise VCOM
-	VCOM_init();
+	//VCOM_init();
 	printf("Starting USB communication\n");
 
 	dbgled(3);
@@ -753,6 +766,13 @@ int main(void)
 
 // 	volatile static int i = 0 ;
 
+	U32 watchdog = 0;
+	U8 connflag[UIP_CONNS];
+	U8 connflag_any = 0;
+
+	for (int i = 0; i < UIP_CONNS; i++)
+		connflag[i] = 0;
+
 	// echo any character received (do USB stuff in interrupt)
 	while (1) {
 
@@ -765,88 +785,100 @@ int main(void)
 
 #endif
 
-		//if (cansend()) {
+#define EPSTAT_FULL 1
+
+		//dbgledscroll();
+
+		dbgled(1);
+
+		if (tx_status == TX_STATUS_WAIT_FOR_PACKET) {
+			if (rx_status == RX_STATUS_WAIT_FOR_PACKET) {
+				U8 status = USBHwEPGetStatus(BULK_OUT_EP);
+				if ((status & EPSTAT_FULL) == EPSTAT_FULL) {
+					BulkOut(BULK_OUT_EP, status);
+				}
+			}
+			dbgled(2);
 			if (rx_status == RX_STATUS_GOT_PACKET) {
 				U16 pLen = rx_packet_buffer_pointer - rx_packet_buffer;
 				U16 pType;
 				printf("packet drain %d bytes\n", pLen);
 				if (isValidPacket(rx_packet_buffer, NULL, &pType)) {
 					if (pType == UIP_ETHTYPE_ARP) {
-						struct arp_hdr *arp = (struct arp_hdr *) rx_packet_buffer;
-						U8 *srcip = (U8 *) &arp->sipaddr[0];
-						U8 *srcmac = (U8 *) &arp->shwaddr;
-						U8 *dstip = (U8 *) &arp->dipaddr[0];
-						U8 *dstmac = (U8 *) &arp->dhwaddr;
-						U8 op = (arp->opcode >> 8);
-						printf("ARP: %d.%d.%d.%d (%02X:%02X:%02X:%02X:%02X:%02X)",
-								srcip[0], srcip[1], srcip[2], srcip[3],
-								srcmac[0], srcmac[1], srcmac[2], srcmac[3], srcmac[4], srcmac[5]
-						);
-						printf(" [%d]", op);
-						if (op == 1) {
-							printf(" is looking for ");
-							printf("ARP: %d.%d.%d.%d",
-									dstip[0], dstip[1], dstip[2], dstip[3]
-							);
-							if (memcmp(dstip, ipaddr, 4) == 0){
-								printf(" ... That's me! Replying...");
-								struct arp_hdr * response = (struct arp_hdr *) tx_packet_buffer;
-								memcpy(response, arp, sizeof(struct arp_hdr));
-								response->opcode = 0x200;
-								memcpy(&response->ethhdr.dest, srcmac, 6);
-								memcpy(&response->ethhdr.src, macaddress_net, 6);
-								memcpy(&response->sipaddr, ipaddr, 4);
-								memcpy(&response->shwaddr, macaddress_net, 6);
-								memcpy(&response->dipaddr, srcip, 4);
-								memcpy(&response->dhwaddr, srcmac, 6);
-								tx_packet_buffer_startpointer = tx_packet_buffer;
-								tx_packet_buffer_endpointer = tx_packet_buffer + sizeof(struct arp_hdr);
-								tx_status = TX_STATUS_GOT_PACKET;
-								//USBHwNakIntEnable(usb_interrupt_bits |= INACK_BI);
-							}
+						memcpy(uip_buf, rx_packet_buffer, pLen);
+						uip_len = pLen;
+						uip_arp_arpin();
+
+						if (uip_len > 0) {
+							txpacket(uip_buf, uip_len);
 						}
-						else {
-							printf(" is at ");
-							printf("ARP: %d.%d.%d.%d (%02X:%02X:%02X:%02X:%02X:%02X)",
-									dstip[0], dstip[1], dstip[2], dstip[3],
-									dstmac[0], dstmac[1], dstmac[2], dstmac[3], dstmac[4], dstmac[5]
-							);
+					}
+					else {
+						memcpy(uip_buf, rx_packet_buffer, pLen);
+						uip_len = pLen;
+						uip_arp_ipin();
+						uip_input();
+						if (uip_len > 0) {
+							uip_arp_out();
+							txpacket(uip_buf, uip_len);
 						}
-						printf("\n");
 					}
 				}
-				rx_status = RX_STATUS_WAIT_FOR_PACKET;
 				rx_packet_buffer_pointer = rx_packet_buffer;
-				USBHwEPStall(BULK_OUT_EP, 0);
+				rx_status = RX_STATUS_WAIT_FOR_PACKET;
+	// 			USBHwEPStall(BULK_OUT_EP, 0);
 			}
+		}
+		dbgled(3);
+		if (tx_status != TX_STATUS_GOT_PACKET) {
 			if (timer_1_2s->flag) {
 				timer_1_2s->flag = 0;
+				connflag_any = 1;
 				for(int i = 0; i < UIP_CONNS; i++)
 				{
-					//uip_periodic(i);
-					/* If the above function invocation resulted in data that
-					 *    should be sent out on the network, the global variable
-					 *    uip_len is set to a value > 0. */
-					if(uip_len > 0) {
-						//uip_arp_out();
-						//TODO: send data
-						//tapdev_send(uip_buf,uip_len);
+					connflag[i] = 1;
+				}
+			}
+			dbgled(4);
+			if (connflag_any) {
+				int i;
+				for (i = 0; i < UIP_CONNS; i++) {
+					if (connflag[i]) {
+						connflag[i] = 0;
+						uip_periodic(i);
+						/* If the above function invocation resulted in data that
+							*    should be sent out on the network, the global variable
+							*    uip_len is set to a value > 0. */
+						if(uip_len > 0) {
+							uip_arp_out();
+							txpacket(uip_buf, uip_len);
+							//USBHwEPStall(BULK_IN_EP, 0);
+							break;
+						}
 					}
 				}
-			}
-			if (timer_10s->flag) {
-				timer_10s->flag = 0;
-				//uip_arp_timer();
-				printf("timer 10s TX%d RX%d INT%d BIN:0x%02X BOUT:0x%02X\n", tx_status, rx_status, usb_interrupt_bits, USBHwEPGetStatus(BULK_IN_EP), USBHwEPGetStatus(BULK_OUT_EP));
-			}
-			else {
-				c = VCOM_getchar();
-				if (c != EOF) {
-					printf("%02x,", c);
+				if (i == UIP_CONNS) {
+					connflag_any = 0;
 				}
 			}
-		//}
-		//dbgledscroll();
+		}
+		dbgled(5);
+		if (tx_status == TX_STATUS_GOT_PACKET) {
+			U8 status = USBHwEPGetStatus(BULK_IN_EP);
+			if ((status & EPSTAT_FULL) == 0) {
+				BulkIn(BULK_IN_EP, status);
+			}
+		}
+		dbgled(6);
+		if (timer_10s->flag) {
+			timer_10s->flag = 0;
+			printf("timer 10s TX%d RX%d INT%d BIN:0x%02X BOUT:0x%02X\n", tx_status, rx_status, usb_interrupt_bits, USBHwEPGetStatus(BULK_IN_EP), USBHwEPGetStatus(BULK_OUT_EP));
+			uip_arp_timer();
+			watchdog = 0;
+		}
+		dbgled(7);
+		watchdog++;
+		//dbgled(watchdog >> 13);
 	}
 
 	return 0;

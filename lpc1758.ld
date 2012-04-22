@@ -15,7 +15,7 @@
  * the new terms are clearly indicated on the first page of each file where
  * they apply. */
 
-/* mthomas: 
+/* mthomas:
    - rom length to 256k for lpc1766
    - commented out GROUP (portablity for non-CS toolchains
    - added _sdata, _sbss, _ebss
@@ -173,15 +173,16 @@ SECTIONS
   {
     *(.stack)
   } >ram
-  
+
   .ahb_bank0(NOLOAD) :
   {
     *(.ahb_sram_bank0 .ahb_sram_bank0.*)
-    *(.USB_RAM .USB_RAM.*)
+		*(buffers buffers* .buffers .buffers.*)
+		*(.USB_RAM .USB_RAM.*)
     *(USB_RAM USB_RAM.*)
   } > ahbb0
-  
-  
+
+
   __cs3_region_init_ram = LOADADDR (.data);
   __cs3_region_init_size_ram = _edata - __cs3_region_start_ram;
   __cs3_region_zero_size_ram = _end - _edata;
